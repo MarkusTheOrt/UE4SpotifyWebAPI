@@ -19,7 +19,6 @@ ASpotifyController::ASpotifyController()
 
 void ASpotifyController::GetAccessToken()
 {
-  Http = &FHttpModule::Get();
   auto Request = Http->CreateRequest();
   Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnAccessTokenReceived);
   Request->SetURL("https://accounts.spotify.com/api/token");
@@ -58,7 +57,6 @@ void ASpotifyController::OnAccessTokenReceived(FHttpRequestPtr Request, FHttpRes
 void ASpotifyController::UseRefreshToken()
 {
   UE_LOG(LogTemp, Warning, TEXT("Requesting Refresh Token Now!"));
-  Http = &FHttpModule::Get();
   auto Request = Http->CreateRequest();
   Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnAccessTokenReceived);
   //This is the url on which to process the request
@@ -131,10 +129,9 @@ FString ASpotifyController::BuildAuthURL()
 void ASpotifyController::FetchCurrentSong()
 {
   if (AccessToken.Len() == 0) return;
-  Http = &FHttpModule::Get();
+
   auto Request = Http->CreateRequest();
   Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnCurrentSongReceived);
-  //This is the url on which to process the request
   Request->SetURL("https://api.spotify.com/v1/me/player/currently-playing");
   Request->SetVerb("GET");
   Request->SetHeader("Content-Type", TEXT("application/json"));
@@ -145,20 +142,18 @@ void ASpotifyController::FetchCurrentSong()
 
 void ASpotifyController::RequestPause()
 {
+  //Pause/Play
   if (bIsPlaying)
   {
-    Http = &FHttpModule::Get();
     auto Request = Http->CreateRequest();
-    //This is the url on which to process the request
     Request->SetURL("https://api.spotify.com/v1/me/player/pause");
     Request->SetVerb("PUT");
     Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
     Request->ProcessRequest();
   }
   else {
-    Http = &FHttpModule::Get();
+
     auto Request = Http->CreateRequest();
-    //This is the url on which to process the request
     Request->SetURL("https://api.spotify.com/v1/me/player/play");
     Request->SetVerb("PUT");
     Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
@@ -169,9 +164,8 @@ void ASpotifyController::RequestPause()
 
 void ASpotifyController::RequestNextSong()
 {
-  Http = &FHttpModule::Get();
+
   auto Request = Http->CreateRequest();
-  //This is the url on which to process the request
   Request->SetURL("https://api.spotify.com/v1/me/player/next");
   Request->SetVerb("POST");
   Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
@@ -180,9 +174,8 @@ void ASpotifyController::RequestNextSong()
 
 void ASpotifyController::RequestPrevSong()
 {
-  Http = &FHttpModule::Get();
+
   auto Request = Http->CreateRequest();
-  //This is the url on which to process the request
   Request->SetURL("https://api.spotify.com/v1/me/player/previous");
   Request->SetVerb("POST");
   Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
@@ -202,7 +195,7 @@ void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpRes
 
     if (FJsonSerializer::Deserialize(Reader, JsonObject))
     {
-
+      //Lets get some of those JSON fields
       TSharedPtr<FJsonObject> Item = JsonObject->GetObjectField("item");
 
       bIsPlaying = JsonObject->GetBoolField("is_playing");
@@ -211,20 +204,27 @@ void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpRes
 
       auto Artists = Item->GetArrayField("artists");
 
-      FString RetArts = "";
+      //Returning Artists
+      FString ReturnArtists = "";
 
+      //Show ALL the artists working on this song
       for (TSharedPtr<FJsonValue> Artist : Artists)
       {
-        if (RetArts.Len() > 0)
-          RetArts += ", ";
-        RetArts += Artist->AsObject()->GetStringField("name");
+        if (ReturnArtists.Len() > 0)
+          ReturnArtists += ", ";
+        ReturnArtists += Artist->AsObject()->GetStringField("name");
 
       }
-      OnCurrentSong(Item->GetStringField("name"), RetArts, Album->GetStringField("name"), Item->GetIntegerField("duration_ms"), JsonObject->GetIntegerField("progress_ms"), bIsPlaying);
+      OnCurrentSong(
+        Item->GetStringField("name"), 
+        ReturnArtists,
+        Album->GetStringField("name"), 
+        Item->GetIntegerField("duration_ms"), 
+        JsonObject->GetIntegerField("progress_ms"), 
+        bIsPlaying
+      );
 
     }
-
-
 
   }
 }
@@ -256,6 +256,7 @@ void ASpotifyController::TCPSocketListener()
   bool bPending;
   if (ListenerSocket->HasPendingConnection(bPending) && bPending)
   {
+
     if (ConnectionSocket)
     {
       ConnectionSocket->Close();
@@ -294,6 +295,7 @@ void ASpotifyController::TCPConnectionHandler()
     return;
   }
 
+  //Convert our Received Message (plain HTTP Request) to an UnrealString
   const FString ReceivedString = FString(ANSI_TO_TCHAR(reinterpret_cast<const char*>(ReceivedData.GetData())));
 
   //Now lets send back a little page that says success (and closes if JS is enabled)
@@ -306,20 +308,23 @@ void ASpotifyController::TCPConnectionHandler()
   uint32 SentSize;
   while (ConnectionSocket && ConnectionSocket->HasPendingData(SentSize));
 
+  //Request was successful (need to add fail checking everywhere... I'm Lazy)
   GetWorldTimerManager().ClearTimer(ConnectionTimer);
+  //Close Connection, not needed anymore!
   ConnectionSocket->Close();
   SocketSubSys->DestroySocket(ConnectionSocket);
+
+  //Lets get that AuthCode from our HTTP Response
   const FRegexPattern AuthFinder(TEXT("code=(.*)&"));
   FRegexMatcher AuthMatcher(AuthFinder, ReceivedString);
   if (AuthMatcher.FindNext())
   {
-    
     AuthKey = AuthMatcher.GetCaptureGroup(1);
-    
+
     //Great, now that we have the Auth Key we can get our Access- and Refresh Token from the API!
     GetAccessToken();
     
-    
+    //Also Destroy the Listener, not needed anymore at this point!
     GetWorldTimerManager().ClearTimer(ListenerTimer);
     if (ListenerSocket)
     {
@@ -344,7 +349,7 @@ void ASpotifyController::BeginAuth()
   }
 
   StartTCPListener();
-
+  Http = &FHttpModule::Get();
   //Wait for ListenerSocket to start up!
   while (!ListenerSocket);
 
