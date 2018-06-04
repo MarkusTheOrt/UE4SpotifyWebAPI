@@ -61,6 +61,9 @@ protected:
   UPROPERTY(EditDefaultsOnly, Category = "Spotify")
   FString RedirectUri;
 
+  UPROPERTY(EditDefaultsOnly, Category = "Spotify")
+  uint16 Port;
+
   //Select the auth scopes needed (The default ones are enough for playing/pausing and fetching meta)
   UPROPERTY(EditDefaultsOnly, Category = "Spotify")
   TArray<ESpotifyApiScopes> AuthScopes;
@@ -126,6 +129,8 @@ protected:
   );
 
   void FetchCurrentSong();
+
+  void PlaybackRequest(FString Url, FString Type);
 
   UFUNCTION(BlueprintCallable, Category = "Spotify")
   void RequestPause();

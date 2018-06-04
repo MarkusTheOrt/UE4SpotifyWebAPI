@@ -7,6 +7,7 @@
 
 ASpotifyController::ASpotifyController()
   : PollingInterval(0.2)
+  , Port(8890)
   , RedirectUri("http://127.0.0.1:8890")
   , AuthScopes({
       ESpotifyApiScopes::UserReadCurrentlyPlaying, 
@@ -140,46 +141,40 @@ void ASpotifyController::FetchCurrentSong()
 
 }
 
+void ASpotifyController::PlaybackRequest(FString Url, FString Type)
+{
+  if (AccessToken.Len() == 0) return;
+
+  auto Request = Http->CreateRequest();
+  Request->SetURL(Url);
+  Request->SetVerb(Type);
+  Request->SetHeader("Content-Type", TEXT("application/json"));
+  Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
+  Request->ProcessRequest();
+}
+
 void ASpotifyController::RequestPause()
 {
   //Pause/Play
   if (bIsPlaying)
   {
-    auto Request = Http->CreateRequest();
-    Request->SetURL("https://api.spotify.com/v1/me/player/pause");
-    Request->SetVerb("PUT");
-    Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
-    Request->ProcessRequest();
+    PlaybackRequest("https://api.spotify.com/v1/me/player/pause", "PUT");
   }
-  else {
-
-    auto Request = Http->CreateRequest();
-    Request->SetURL("https://api.spotify.com/v1/me/player/play");
-    Request->SetVerb("PUT");
-    Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
-    Request->ProcessRequest();
+  else 
+  {
+    PlaybackRequest("https://api.spotify.com/v1/me/player/play", "PUT");
   }
   
 }
 
 void ASpotifyController::RequestNextSong()
 {
-
-  auto Request = Http->CreateRequest();
-  Request->SetURL("https://api.spotify.com/v1/me/player/next");
-  Request->SetVerb("POST");
-  Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
-  Request->ProcessRequest();
+  PlaybackRequest("https://api.spotify.com/v1/me/player/next", "POST");
 }
 
 void ASpotifyController::RequestPrevSong()
 {
-
-  auto Request = Http->CreateRequest();
-  Request->SetURL("https://api.spotify.com/v1/me/player/previous");
-  Request->SetVerb("POST");
-  Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
-  Request->ProcessRequest();
+  PlaybackRequest("https://api.spotify.com/v1/me/player/previous", "POST");
 }
 
 void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
@@ -232,8 +227,8 @@ void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpRes
 
 void ASpotifyController::StartTCPListener()
 {
-  //Change so port can be changed dynamically
-  FIPv4Endpoint Endpoint(FIPv4Address::InternalLoopback, 8890);
+  //Internal Loopback is 127.0.0.1 (localhost)
+  FIPv4Endpoint Endpoint(FIPv4Address::InternalLoopback, Port);
   ListenerSocket = FTcpSocketBuilder(TEXT("ListenerSocket"))
     .AsReusable()
     .BoundToEndpoint(Endpoint)
