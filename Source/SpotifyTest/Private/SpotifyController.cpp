@@ -47,6 +47,12 @@ void ASpotifyController::OnAccessTokenReceived(FHttpRequestPtr Request, FHttpRes
 
       AccessToken = JsonObject->GetStringField("access_token");
       RefreshToken = JsonObject->GetStringField("refresh_token");
+
+      if (AccessToken.Len() > 0)
+      {
+        UE_LOG(LogTemp, Warning, TEXT("Successfully Connected to Spotify!"));
+      }
+
       GetWorldTimerManager().SetTimer(RefreshTokenTimer, this, &ThisClass::UseRefreshToken, JsonObject->GetIntegerField("expires_in") - 120, false);
       GetWorldTimerManager().SetTimer(PollingTimer, this, &ThisClass::FetchCurrentSong, PollingInterval, true);
       FetchCurrentSong();
@@ -64,7 +70,7 @@ void ASpotifyController::UseRefreshToken()
   Request->SetURL("https://accounts.spotify.com/api/token");
   Request->SetVerb("POST");
   Request->SetHeader("Content-Type", TEXT("application/x-www-form-urlencoded"));
-  const FString Content = "grant_type=refresh_code&redirect_uri=%s&client_id=%s&client_secret=%s&code=%s";
+  const FString Content = "grant_type=refresh_code&redirect_uri=%s&client_id=%s&client_secret=%s&refresh_token=%s";
   Request->SetContentAsString(FString::Printf(*Content, *RedirectUri, *ClientId, *ClientSecret, *RefreshToken));
   Request->ProcessRequest();
 }
@@ -316,8 +322,10 @@ void ASpotifyController::TCPConnectionHandler()
   {
     AuthKey = AuthMatcher.GetCaptureGroup(1);
 
+    UE_LOG(LogTemp, Warning, TEXT("Authkey successfully granted, Trying to fetch AccessToken from API Now."))
     //Great, now that we have the Auth Key we can get our Access- and Refresh Token from the API!
     GetAccessToken();
+
     
     //Also Destroy the Listener, not needed anymore at this point!
     GetWorldTimerManager().ClearTimer(ListenerTimer);
@@ -350,7 +358,7 @@ void ASpotifyController::BeginAuth()
 
   //Open up Spotify Auth Page for your app!
   FPlatformProcess::LaunchURL(*BuildAuthURL(), nullptr, nullptr);
-
+  UE_LOG(LogTemp, Warning, TEXT("Launched Auth URL, Waiting for user to Authorize the app."));
 
 }
 
