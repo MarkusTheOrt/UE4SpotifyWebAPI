@@ -25,7 +25,7 @@ void ASpotifyController::GetAccessToken()
   Request->SetURL("https://accounts.spotify.com/api/token");
   Request->SetVerb("POST");
   Request->SetHeader("Content-Type", TEXT("application/x-www-form-urlencoded"));
-  const FString Content = "grant_type=refresh_code&redirect_uri=%s&client_id=%s&client_secret=%s&code=%s";
+  const FString Content = "grant_type=authorization_code&redirect_uri=%s&client_id=%s&client_secret=%s&code=%s";
   Request->SetContentAsString(FString::Printf(*Content, *RedirectUri, *ClientId, *ClientSecret, *AuthKey));
   Request->ProcessRequest();
   
