@@ -317,7 +317,9 @@ void ASpotifyController::TCPConnectionHandler()
 
   //Lets get that AuthCode from our HTTP Response
   const FRegexPattern AuthFinder(TEXT("code=(.*)&"));
+  const FRegexPattern ErrorFinder(TEXT("error=(.*)&"));
   FRegexMatcher AuthMatcher(AuthFinder, ReceivedString);
+  FRegexMatcher ErrMatcher(ErrorFinder, ReceivedString);
   if (AuthMatcher.FindNext())
   {
     AuthKey = AuthMatcher.GetCaptureGroup(1);
@@ -335,6 +337,11 @@ void ASpotifyController::TCPConnectionHandler()
       SocketSubSys->DestroySocket(ListenerSocket);
     }
   }
+  else if (ErrMatcher.FindNext())
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Authentication Error: %s"), *ErrMatcher.GetCaptureGroup(1))
+  }
+  
 }
 
 void ASpotifyController::BeginDestroy()
