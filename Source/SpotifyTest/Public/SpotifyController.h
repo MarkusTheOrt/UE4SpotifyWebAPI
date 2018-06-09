@@ -120,12 +120,14 @@ protected:
   //BP Event for more Cosmetic things.
   UFUNCTION(BlueprintImplementableEvent, Category = "Spotify")
   void OnCurrentSong(
-    const FString& SongName, 
-    const FString& ArtistName, 
-    const FString& AlbumName, 
-    const int32& Length, 
-    const int32& CurrentPos, 
-    const bool IsPlaying
+    const FString& SongName,
+    const FString& ArtistName,
+    const FString& AlbumName,
+    const int32& Length,
+    const int32& CurrentPos,
+    const bool IsPlaying,
+    const float& Volume,
+    const FString& AlbumImage
   );
 
   void FetchCurrentSong();
@@ -171,5 +173,23 @@ protected:
 
   UFUNCTION(BlueprintCallable, Category = "Spotify")
   void BeginAuth();
+
+public:
+
+  UFUNCTION(BlueprintCallable, Category = "Playback")
+  void SetProgress(float InPercent);
+
+  UFUNCTION(BlueprintCallable, Category = "Playback")
+  void SetVolume(float InPercent);
+
+  UFUNCTION(BlueprintCallable, Category = "Playback")
+  void SetSong(FString SPContextURI);
+
+protected:
+
+  int32 PlaybackPos;
+  int32 Duration;
+  FString SpotifyUrl;
+
 
 };
