@@ -139,7 +139,7 @@ void ASpotifyController::FetchCurrentSong()
 
   auto Request = Http->CreateRequest();
   Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnCurrentSongReceived);
-  Request->SetURL("https://api.spotify.com/v1/me/player/currently-playing");
+  Request->SetURL("https://api.spotify.com/v1/me/player");
   Request->SetVerb("GET");
   Request->SetHeader("Content-Type", TEXT("application/json"));
   Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
@@ -199,9 +199,19 @@ void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpRes
       //Lets get some of those JSON fields
       TSharedPtr<FJsonObject> Item = JsonObject->GetObjectField("item");
 
+      TSharedPtr<FJsonObject> Device = JsonObject->GetObjectField("Device");
+
       bIsPlaying = JsonObject->GetBoolField("is_playing");
 
       TSharedPtr<FJsonObject> Album = Item->GetObjectField("album");
+
+      auto AlbumImgs = Album->GetArrayField("images");
+      FString NewUrl;
+      for (TSharedPtr<FJsonValue> Image : AlbumImgs)
+      {
+        NewUrl = Image->AsObject()->GetStringField("url");
+        break;
+      }
 
       auto Artists = Item->GetArrayField("artists");
 
@@ -216,13 +226,17 @@ void ASpotifyController::OnCurrentSongReceived(FHttpRequestPtr Request, FHttpRes
         ReturnArtists += Artist->AsObject()->GetStringField("name");
 
       }
+      Duration = Item->GetIntegerField("duration_ms");
+      PlaybackPos = JsonObject->GetIntegerField("progress_ms");
       OnCurrentSong(
         Item->GetStringField("name"), 
         ReturnArtists,
         Album->GetStringField("name"), 
         Item->GetIntegerField("duration_ms"), 
         JsonObject->GetIntegerField("progress_ms"), 
-        bIsPlaying
+        bIsPlaying,
+        Device->GetIntegerField("volume_percent"),
+        NewUrl
       );
 
     }
@@ -330,6 +344,8 @@ void ASpotifyController::TCPConnectionHandler()
 
     
     //Also Destroy the Listener, not needed anymore at this point!
+
+    
     GetWorldTimerManager().ClearTimer(ListenerTimer);
     if (ListenerSocket)
     {
@@ -339,7 +355,16 @@ void ASpotifyController::TCPConnectionHandler()
   }
   else if (ErrMatcher.FindNext())
   {
-    UE_LOG(LogTemp, Warning, TEXT("Authentication Error: %s"), *ErrMatcher.GetCaptureGroup(1))
+   
+    
+    UE_LOG(LogTemp, Warning, TEXT("Authentication Error: %s"), *ErrMatcher.GetCaptureGroup(1));
+
+    GetWorldTimerManager().ClearTimer(ListenerTimer);
+    if (ListenerSocket)
+    {
+      ListenerSocket->Close();
+      SocketSubSys->DestroySocket(ListenerSocket);
+    }
   }
   
 }
@@ -367,5 +392,30 @@ void ASpotifyController::BeginAuth()
   FPlatformProcess::LaunchURL(*BuildAuthURL(), nullptr, nullptr);
   UE_LOG(LogTemp, Warning, TEXT("Launched Auth URL, Waiting for user to Authorize the app."));
 
+}
+
+void ASpotifyController::SetProgress(float InPercent)
+{
+  FString PlaybackPos = FString::FromInt(Duration * InPercent);
+  PlaybackRequest("https://api.spotify.com/v1/me/player/seek?position_ms=" + PlaybackPos  , "PUT");
+}
+
+void ASpotifyController::SetVolume(float InPercent)
+{
+  FString Volume = FString::FromInt(InPercent * 100);
+  PlaybackRequest("https://api.spotify.com/v1/me/player/volume?volume_percent=" + Volume, "PUT");
+}
+
+void ASpotifyController::SetSong(FString SPContextURI)
+{
+  if (AccessToken.Len() == 0) return;
+
+  auto Request = Http->CreateRequest();
+  Request->SetURL("https://api.spotify.com/v1/me/player/play");
+  Request->SetVerb("PUT");
+  Request->SetHeader("Content-Type", TEXT("application/json"));
+  Request->SetHeader("Authorization", TEXT("Bearer ") + AccessToken);
+  Request->SetContentAsString(FString::Printf(TEXT("{\r\n  \"uris\" : [\r\n   \"%s\"\r\n  ]\r\n}"), *SPContextURI));
+  Request->ProcessRequest();
 }
 
