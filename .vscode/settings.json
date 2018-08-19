@@ -1,0 +1,10 @@
+{
+	"files.exclude": {
+		"E:/_Repos/UE4SpotifyWebAPI/.git": true,
+		"E:/_Repos/UE4SpotifyWebAPI/.vs": true,
+		"E:/_Repos/UE4SpotifyWebAPI/.vscode": true,
+		"E:/_Repos/UE4SpotifyWebAPI/Content": true,
+		"E:/_Repos/UE4SpotifyWebAPI/Intermediate": true,
+		"E:/_Repos/UE4SpotifyWebAPI/Saved": true
+	}
+}

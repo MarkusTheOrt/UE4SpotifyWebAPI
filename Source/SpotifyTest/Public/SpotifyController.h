@@ -8,6 +8,7 @@
 #include "Runtime/Networking/Public/Networking.h"
 #include "Runtime/Sockets/Public/Sockets.h"
 #include "Networking.h"
+#include "GameFramework/SaveGame.h"
 #include "SpotifyController.generated.h"
 
 
@@ -34,6 +35,19 @@ enum class ESpotifyApiScopes : uint8
   UserFollowRead
 };
 
+
+UCLASS()
+class SPOTIFYTEST_API USpotifyTokenSave : public USaveGame
+{
+  GENERATED_BODY()
+
+public:
+
+  UPROPERTY(VisibleAnywhere, Category = "Auth")
+  FString RefreshToken;
+
+
+};
 
 /**
  * 
@@ -71,11 +85,15 @@ protected:
   UPROPERTY(EditDefaultsOnly, Category = "Spotify")
   FString State;
 
+  // How often is the service being pinged for updates (track, volume, etc...)
   UPROPERTY(BlueprintReadOnly, Category = "Spotify")
   float PollingInterval;
 
+  // The Return you get once the acces has been granted! (default = success page + js closing that window/tab)
   UPROPERTY(EditDefaultsOnly, Category = "Spotify")
-    FString WebReturn;
+  FString WebReturn;
+
+  USpotifyTokenSave* TokenSave;
 
   //Handles Polling the API
   FTimerHandle PollingTimer;
@@ -89,7 +107,7 @@ protected:
   // The AccessToken retrieved using the AuthKey from Spotifys API
   FString AccessToken;
 
-  // The RefreshToken retrieved using the AuthKey from Spotifys API
+  // The RefreshToken retrieved using the AuthKey from Spotifys API (Needs to be updated for savegame usage)
   FString RefreshToken;
 
   FHttpModule* Http;
@@ -107,6 +125,8 @@ protected:
 
   //Delegate Endpoint
   void OnAccessTokenReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+
+  void OnRefreshTokenUsed(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
 
   //On CurrentlyPlayed Received
   void OnCurrentSongReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
@@ -142,6 +162,8 @@ protected:
 
   UFUNCTION(BlueprintCallable, Category = "Spotify")
   void RequestPrevSong();
+
+
 
 private:
 

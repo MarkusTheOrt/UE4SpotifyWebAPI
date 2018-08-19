@@ -2,7 +2,12 @@
 
 #include "SpotifyController.h"
 #include "Engine/World.h"
+#include "Runtime/Core/Public/Misc/Base64.h"
+#include "Runtime/Engine/Classes/Kismet/GameplayStatics.h"
 #include "Runtime/Engine/Public/TimerManager.h"
+
+
+
 
 
 ASpotifyController::ASpotifyController()
@@ -48,30 +53,78 @@ void ASpotifyController::OnAccessTokenReceived(FHttpRequestPtr Request, FHttpRes
       AccessToken = JsonObject->GetStringField("access_token");
       RefreshToken = JsonObject->GetStringField("refresh_token");
 
+      TokenSave = Cast<USpotifyTokenSave>(UGameplayStatics::CreateSaveGameObject(USpotifyTokenSave::StaticClass()));
+      TokenSave->RefreshToken = RefreshToken;
+      UGameplayStatics::SaveGameToSlot(TokenSave, TEXT("SpotifyAuth"), 0);
+
       if (AccessToken.Len() > 0)
       {
         UE_LOG(LogTemp, Warning, TEXT("Successfully Connected to Spotify!"));
+        UE_LOG(LogTemp, Warning, TEXT("RefreshToken: %s"), *RefreshToken);
       }
-
-      GetWorldTimerManager().SetTimer(RefreshTokenTimer, this, &ThisClass::UseRefreshToken, JsonObject->GetIntegerField("expires_in") - 120, false);
+      
+      //Give us some threshold on the Refresh Token timer, better early than too late ^^
+      GetWorldTimerManager().SetTimer(RefreshTokenTimer, this, &ThisClass::UseRefreshToken, /*JsonObject->GetIntegerField("expires_in") - 120*/ 10, false);
+      GetWorldTimerManager().ClearTimer(PollingTimer);
       GetWorldTimerManager().SetTimer(PollingTimer, this, &ThisClass::FetchCurrentSong, PollingInterval, true);
       FetchCurrentSong();
     }
   }
 }
 
+void ASpotifyController::OnRefreshTokenUsed(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+  if(bWasSuccessful)
+  {
+
+    if(Response->GetResponseCode() == 400)
+    {
+      StartTCPListener();
+      Http = &FHttpModule::Get();
+      //Wait for ListenerSocket to start up!
+      while (!ListenerSocket);
+
+      //Open up Spotify Auth Page for your app!
+      FPlatformProcess::LaunchURL(*BuildAuthURL(), nullptr, nullptr);
+      UE_LOG(LogTemp, Warning, TEXT("Launched Auth URL, Waiting for user to Authorize the app."));
+      return;
+    }
+
+    TSharedPtr<FJsonObject> JsonObject;
+
+    TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+    UE_LOG(LogTemp, Warning, TEXT("%s"), *Response->GetContentAsString());
+    if(FJsonSerializer::Deserialize(Reader, JsonObject))
+    {
+
+      AccessToken = JsonObject->GetStringField("access_token");
+      UE_LOG(LogTemp, Warning, TEXT("NewToken: %s"), *JsonObject->GetStringField("access_token"));
+      GetWorldTimerManager().SetTimer(RefreshTokenTimer, this, &ThisClass::UseRefreshToken, JsonObject->GetIntegerField("expires_in") - 120, false);
+      GetWorldTimerManager().ClearTimer(PollingTimer);
+      GetWorldTimerManager().SetTimer(PollingTimer, this, &ThisClass::FetchCurrentSong, PollingInterval, true);
+      FetchCurrentSong();
+    }
+
+  }
+}
 
 void ASpotifyController::UseRefreshToken()
 {
+  if (RefreshToken.Len() == 0)
+    return;
+
   UE_LOG(LogTemp, Warning, TEXT("Requesting Refresh Token Now!"));
+
   auto Request = Http->CreateRequest();
-  Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnAccessTokenReceived);
+  Request->OnProcessRequestComplete().BindUObject(this, &ThisClass::OnRefreshTokenUsed);
   //This is the url on which to process the request
   Request->SetURL("https://accounts.spotify.com/api/token");
   Request->SetVerb("POST");
+  const FString RefreshAuth = "Basic " + FBase64::Encode(ClientId + ":" + ClientSecret);
+  Request->SetHeader("Authorization", RefreshAuth);
   Request->SetHeader("Content-Type", TEXT("application/x-www-form-urlencoded"));
-  const FString Content = "grant_type=refresh_code&redirect_uri=%s&client_id=%s&client_secret=%s&refresh_token=%s";
-  Request->SetContentAsString(FString::Printf(*Content, *RedirectUri, *ClientId, *ClientSecret, *RefreshToken));
+  const FString Content = "grant_type=refresh_token&refresh_token=%s";
+  Request->SetContentAsString(FString::Printf(*Content, *RefreshToken));
   Request->ProcessRequest();
 }
 
@@ -376,6 +429,8 @@ void ASpotifyController::BeginDestroy()
 
 void ASpotifyController::BeginAuth()
 {
+
+  Http = &FHttpModule::Get();
   if (ClientId.Len() <= 0 || ClientSecret.Len() <= 0)
   {
 
@@ -383,8 +438,18 @@ void ASpotifyController::BeginAuth()
     return;
   }
 
+  if(UGameplayStatics::DoesSaveGameExist(TEXT("SpotifyAuth"), 0))
+  {
+    TokenSave = Cast<USpotifyTokenSave>(UGameplayStatics::LoadGameFromSlot(TEXT("SpotifyAuth"), 0));
+    RefreshToken = TokenSave->RefreshToken;
+    UseRefreshToken();
+    UE_LOG(LogTemp, Warning, TEXT("Saved Refresh: %s"), *RefreshToken);
+    return;
+  }
+
+
   StartTCPListener();
-  Http = &FHttpModule::Get();
+  
   //Wait for ListenerSocket to start up!
   while (!ListenerSocket);
 
